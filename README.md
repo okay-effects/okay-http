@@ -5,4 +5,4 @@
 loopback for a client and a server in one process. `rest`: paths with parameters, routes dispatched to programs, JSON
 bodies read by a `Shape` with the problems as a 400, links and resources as data — a representation with its
 affordances — and troubles in RFC 9457's shape. On [okay-simple](https://github.com/okay-effects/okay-simple) alone, for
-Scala 3 and 2.13. The REST and HTML faces of [okay-face](https://github.com/okay-effects/okay-face) stand on it.
+Scala 3 and 2.13. The REST and HTML faces of [okay-faces](https://github.com/okay-effects/okay-faces) stand on it.
