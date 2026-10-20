@@ -34,6 +34,8 @@ lazy val core = crossBoth("core", "core").settings(name := "okay-http",
     "io.github.okay-effects" %%% "okay-effects-machine" % okayEffects % Test,
     "io.github.okay-effects" %%% "okay-effects-free" % okayEffects % Test))
   .jvmSettings(Compile / unmanagedSourceDirectories += baseDirectory.value.getParentFile / "src" / "main" / "scala-jvm")
+  .jsSettings(Compile / unmanagedSourceDirectories += baseDirectory.value.getParentFile / "src" / "main" / "scala-js",
+    libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "2.8.0")
 
 /** REST AS A STYLE over the transport: routes by method and path, JSON bodies, problems, links and forms as data */
 lazy val rest = crossBoth("rest", "rest").dependsOn(core).settings(name := "okay-http-rest",
