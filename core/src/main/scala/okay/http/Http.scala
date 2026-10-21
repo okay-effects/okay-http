@@ -17,7 +17,9 @@ object Fetch {
   final case class Call[X](method: String, url: String, headers: Map[String, String], body: String, answer: Response => X) extends Fetch[X]
 }
 
-class Https[F <: Effects](implicit implementation: F) {
+/** `F` the implementation's singleton type: with an implicit implementation in scope (`import okay.effects.machine.implicits._`)
+ * `new Https()` infers it, on both compilers; the `Singleton` bound keeps it exact, so its `!` is the one everything else uses */
+class Https[F <: Effects with Singleton](implicit implementation: F) {
   val fx: F = implementation
   import fx._
 

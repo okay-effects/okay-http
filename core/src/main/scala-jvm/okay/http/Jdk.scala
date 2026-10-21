@@ -48,7 +48,7 @@ object JdkServer {
 }
 
 /** the JDK's handlers, over any implementation */
-class JdkHttp[F <: Effects](implicit implementation: F) {
+class JdkHttp[F <: Effects with Singleton](implicit implementation: F) {
   val fx: F = implementation
   import fx._
 

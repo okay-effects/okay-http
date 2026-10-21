@@ -39,7 +39,7 @@ final case class Trouble(status: Int, title: String, problems: Problems = Nil) {
 }
 
 /** routes: a method and a path pattern to a program of the row; dispatched in order, 404 and 405 as data */
-class Rests[F <: Effects](implicit implementation: F) {
+class Rests[F <: Effects with Singleton](implicit implementation: F) {
   val fx: F = implementation
   import fx._
 
