@@ -35,6 +35,16 @@ class Https[F <: Effects with Singleton](implicit implementation: F) {
     loop
   }
 
+  /** SERVICES ON ONE PORT, by path prefix: the request goes to the service of the longest prefix its path starts with
+   * (`"/"` takes the rest) — `byPrefix("/sessions" -> rest, "/s" -> html, "/" -> pages)` */
+  def byPrefix[R[_]](mounts: (String, Request => Response ! R)*): Request => Response ! R = {
+    val ordered = mounts.sortBy(-_._1.length)
+    req => ordered.find { case (prefix, _) => prefix == "/" || req.path == prefix || req.path.startsWith(prefix.stripSuffix("/") + "/") } match {
+      case Some((_, service)) => service(req)
+      case None => pure[Response, R](Response.notFound(req.path))
+    }
+  }
+
   /** the requests of a script, in order; the responses collected */
   def scripted(requests: List[Request]): Scripted = new Scripted(requests)
   final class Scripted(requests: List[Request]) {
