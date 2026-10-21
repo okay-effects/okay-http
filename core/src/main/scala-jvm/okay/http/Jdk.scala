@@ -52,6 +52,16 @@ class JdkHttp[F <: Effects with Singleton](implicit implementation: F) {
   val fx: F = implementation
   import fx._
 
+  /** A SERVICE SERVED, whole: `run(new JdkHttp().serve(port, host)(service))` — the server started when the program
+   * runs, every request answered by the service, until the server stops; a line on standard error says where */
+  def serve(port: Int = 8080, host: String = "127.0.0.1", quiet: Boolean = false)(service: Request => Response ! ({ type L[X] = okay.effects.Sum[Pure, Http, X] })#L): Unit ! Pure = {
+    type H[X] = okay.effects.Sum[Pure, Http, X]
+    pure(()).flatMap { _ =>
+      val server = JdkServer.start(port, host)
+      if (!quiet) System.err.println(s"serving at http://$host:${server.port}/")
+      jdk(server)(new Https[fx.type]()(fx).serve[H](service))
+    }
+  }
   /** `Http` answered by a running `JdkServer`: in place, blocking on the queue */
   def jdk(server: JdkServer): Jdk = new Jdk(server)
   final class Jdk(server: JdkServer) {
