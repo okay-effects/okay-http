@@ -7,4 +7,12 @@ bodies read by a `Shape` with the problems as a 400, links and resources as data
 affordances — and troubles in RFC 9457's shape. On [okay-simple](https://github.com/okay-effects/okay-simple) alone, for
 Scala 3 and 2.13. The REST and HTML faces of [okay-faces](https://github.com/okay-effects/okay-faces) stand on it.
 
+```scala-sbt
+resolvers ++= Seq("okay-effects" at "https://okay-effects.github.io/okay-simple/maven",
+  "okay-http" at "https://okay-effects.github.io/okay-http/maven")
+libraryDependencies += "io.github.okay-effects" %% "okay-http-rest" % "0.1.0"    // and okay-http, the transport, with it
+```
+
+`%%%` for Scala.js and Scala Native. Releases: [RELEASING.md](RELEASING.md).
+
 In a page (Scala.js), `Browser.fetch()` is the client: a `Request` sent by the browser's `fetch`, the `Response` back as a `Future` — the transport okay-faces' remote face talks through.

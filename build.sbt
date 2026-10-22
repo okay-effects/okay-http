@@ -11,6 +11,14 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 ThisBuild / licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0.txt"))
 ThisBuild / scalaVersion := scala3
 ThisBuild / resolvers += "okay-effects" at "https://okay-effects.github.io/okay-simple/maven"
+/** RELEASES, ON GITHUB PAGES: `sbt publishPages` writes every published module, for both compilers and every platform
+ * asked, as a Maven repository into `target/pages-maven/`; that directory goes to the `gh-pages` branch under
+ * `maven/`, served at https://okay-effects.github.io/okay-http/maven (RELEASING.md) */
+val pagesRepository = settingKey[File]("the Maven repository a release is written to, for GitHub Pages")
+ThisBuild / pagesRepository := (ThisBuild / baseDirectory).value / "target" / "pages-maven"
+ThisBuild / publishTo := Some(MavenCache("pages", (ThisBuild / pagesRepository).value))
+/** no API documentation jars, as okay-simple: the sources jars are published, which IDEs read for the documentation */
+ThisBuild / Compile / packageDoc / publishArtifact := false
 /** okay-simple, from its Pages repository */
 val okayEffects = "0.1.1"
 
@@ -33,7 +41,8 @@ lazy val core = crossBoth("core", "core").settings(name := "okay-http",
     "io.github.okay-effects" %%% "okay-effects-json" % okayEffects,
     "io.github.okay-effects" %%% "okay-effects-machine" % okayEffects % Test,
     "io.github.okay-effects" %%% "okay-effects-free" % okayEffects % Test))
-  .jvmSettings(Compile / unmanagedSourceDirectories += baseDirectory.value.getParentFile / "src" / "main" / "scala-jvm")
+  .jvmSettings(Compile / unmanagedSourceDirectories += baseDirectory.value.getParentFile / "src" / "main" / "scala-jvm",
+    Test / unmanagedSourceDirectories += baseDirectory.value.getParentFile / "src" / "test" / "scala-jvm")
   .jsSettings(Compile / unmanagedSourceDirectories += baseDirectory.value.getParentFile / "src" / "main" / "scala-js",
     libraryDependencies ++= Seq("org.scala-js" %%% "scalajs-dom" % "2.8.0", "io.github.okay-effects" %%% "okay-effects-async" % okayEffects))
 
@@ -42,4 +51,10 @@ lazy val rest = crossBoth("rest", "rest").dependsOn(core).settings(name := "okay
   libraryDependencies ++= Seq("io.github.okay-effects" %%% "okay-effects-shape" % okayEffects,
     "io.github.okay-effects" %%% "okay-effects-machine" % okayEffects % Test))
 
-lazy val root = (project in file(".")).aggregate(core.jvm, rest.jvm).settings(name := "okay-http-root", publish / skip := true)
+lazy val root = (project in file("."))
+  .aggregate(Seq(core, rest).flatMap(_.projects.values.map(p => p: ProjectReference)): _*)
+  .settings(name := "okay-http-root", publish / skip := true, crossScalaVersions := Nil)
+
+/** a release into `target/pages-maven/`, on Scala 3.3 and 2.13 — `sbt -Dplatforms=jvm,js,native publishPages` for
+ * all three platforms */
+addCommandAlias("publishPages", "; ++3.3.8 publish ; ++2.13.18 publish ; ++3.3.8")
