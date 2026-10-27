@@ -4,6 +4,7 @@ import org.scalajs.dom
 import scala.concurrent.{ExecutionContext, Future}
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters._
+import scala.scalajs.js.typedarray.{AB2TA, Int8Array, TA2AB, Uint8Array}
 
 /** THE BROWSER'S CLIENT: a `Request` sent by `fetch`, the `Response` back — the transport a face in the page talks to
  * its server through. `origin` empty is the page's own */
@@ -16,12 +17,15 @@ object Browser {
     val init = new dom.RequestInit {}
     init.method = req.method.asInstanceOf[dom.HttpMethod]
     init.headers = req.headers.map { case (k, vs) => k -> vs.mkString(", ") }.toJSDictionary.asInstanceOf[dom.HeadersInit]
-    if (req.body.nonEmpty) init.body = req.body
+    req.bytes match {
+      case Some(b) => init.body = new Uint8Array(b.toArray.toTypedArray.buffer)
+      case None => if (req.body.nonEmpty) init.body = req.body
+    }
     init.redirect = dom.RequestRedirect.follow
     dom.fetch(url, init).toFuture.flatMap { r =>
-      r.text().toFuture.map { body =>
+      r.arrayBuffer().toFuture.map { buffer =>
         val headers = List("content-type", "location").flatMap(h => Option(r.headers.get(h)).filter(_ != null).map(v => h -> v)).toMap
-        Response(r.status, headers, body)
+        Response(r.status, headers).withContent(Bytes(new Int8Array(buffer).toArray))
       }
     }
   }
@@ -38,6 +42,8 @@ class Fetches[F <: okay.effects.Runner with Singleton](val asynchrony: okay.effe
       def op[X](op: Fetch[X], k: X => A ! Rest) = op match {
         case Fetch.Call(m, url, hs, body, answer) =>
           asynchrony.fromFuture[Response, Rest](send(Request(m, url).copy(headers = hs.map { case (h, v) => h.toLowerCase -> List(v) }, body = body))).flatMap(r => k(answer(r)))
+        case Fetch.Send(base, r, answer) =>
+          asynchrony.fromFuture[Response, Rest](send(r.copy(path = Fetch.target(base, r.copy(query = Map.empty)), query = r.query))).flatMap(res => k(answer(res)))
       }
     })
 }

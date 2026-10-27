@@ -11,8 +11,8 @@ resolvers ++= Seq("okay-effects" at "https://okay-effects.github.io/okay-simple/
   "okay-http" at "https://okay-effects.github.io/okay-http/maven")
 
 libraryDependencies ++= Seq(
-  "io.github.okay-effects" %% "okay-http"      % "0.1.0",   // the transport: Http and Fetch as effects
-  "io.github.okay-effects" %% "okay-http-rest" % "0.1.0"    // REST as a style over it
+  "io.github.okay-effects" %% "okay-http"      % "0.1.1",   // the transport: Http and Fetch as effects
+  "io.github.okay-effects" %% "okay-http-rest" % "0.1.1"    // REST as a style over it
 )
 ```
 

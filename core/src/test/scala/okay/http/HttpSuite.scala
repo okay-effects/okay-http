@@ -15,6 +15,14 @@ class MessageSuite extends munit.FunSuite {
     assertEquals(Response.json(Json.obj("a" -> Json.num(1))), Response(200, Map("Content-Type" -> "application/json"), """{"a":1}"""))
     assertEquals(Response.redirect("/x").status, 303)
   }
+  test("a body over the wire: UTF-8 text stays text, anything else is bytes, nothing lost") {
+    assertEquals(Bytes.body("é ok".getBytes("UTF-8")), ("é ok", None))
+    val raw = Array[Byte](0xc3.toByte, 0x28, -1)
+    assertEquals(Bytes.body(raw), ("", Some(Bytes(raw))))
+    assertEquals(Response.binary(Bytes(raw)).content, Bytes(raw))
+    assertEquals(Request.post("/x", "t").content, Bytes.of("t"))
+    assertEquals(okay.http.Fetch.target("https://h/", Request.get("/a?b=1")), "https://h/a?b=1")
+  }
 }
 
 abstract class HttpChecks(val fx0: Runner, name: String) extends munit.FunSuite {
@@ -26,8 +34,9 @@ abstract class HttpChecks(val fx0: Runner, name: String) extends munit.FunSuite 
 
   /** a little service: GET /hello?name=, POST /echo */
   def service[R[_]](req: Request): Response ! R = pure[Response, R](req match {
-    case Request("GET", "/hello", q, _, _) => Response.text(s"hello, ${q.get("name").flatMap(_.headOption).getOrElse("nobody")}")
-    case Request("POST", "/echo", _, _, body) => Response.ok(body, "application/json")
+    case Request("GET", "/hello", q, _, _, _) => Response.text(s"hello, ${q.get("name").flatMap(_.headOption).getOrElse("nobody")}")
+    case Request("POST", "/echo", _, _, body, None) => Response.ok(body, "application/json")
+    case Request("POST", "/size", _, _, _, Some(b)) => Response.text(b.size.toString)
     case other => Response.notFound(other.path)
   })
 
@@ -42,6 +51,16 @@ abstract class HttpChecks(val fx0: Runner, name: String) extends munit.FunSuite 
     assertEquals(a.body, "hello, Bo"); assertEquals(b.body, "7")
     assertEquals(fx0.run(table { case ("GET", "http://x/hello?name=Bo") => Response.text("hi") }(get[C]("http://x/hello?name=Bo"))).body, "hi")
     assertEquals(fx0.run(table(PartialFunction.empty)(get[C]("http://x/other"))).status, 404)
+  }
+  test(s"$name: BYTES — a binary body sent through the loopback and a table; text stays text") {
+    val raw = Array[Byte](1, -2, 3, -128)
+    val program: (Response, Response) ! C =
+      send[C]("http://x", Request("POST", "/size").withContent(Bytes(raw))).flatMap(a =>
+        send[C]("http://x/", Request("POST", "/echo").withContent(Bytes.of("[1]"))).map(b => (a, b)))
+    assertEquals(fx0.run(loopback[Void](service[Void])(program)) match { case (a, b) => (a.body, b.body) }, ("4", "[1]"))
+    val img = Response.binary(Bytes(raw), "image/png")
+    assertEquals(fx0.run(table { case ("GET", "http://x/i.png?v=2") => img }(send[C]("http://x",
+      Request.get("/i.png?v=2")))).content, Bytes(raw))
   }
 }
 class HttpOnMachine extends HttpChecks(Machine, "machine")

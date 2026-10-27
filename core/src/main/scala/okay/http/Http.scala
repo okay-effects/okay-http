@@ -11,10 +11,35 @@ object Http {
   final case class Respond[X](response: Response, answer: Unit => X) extends Http[X]
 }
 
-/** THE CLIENT'S EFFECT: a request to a URL, its response */
+/** THE CLIENT'S EFFECT: a request to a URL, its response — `Call` a text body's, `Send` any request's, its body text or
+ * bytes (the request's path and query added to `url`) */
 sealed trait Fetch[X]
 object Fetch {
   final case class Call[X](method: String, url: String, headers: Map[String, String], body: String, answer: Response => X) extends Fetch[X]
+  final case class Send[X](url: String, request: Request, answer: Response => X) extends Fetch[X]
+
+  /** where a `Send` goes: `base` and the request's path and query */
+  def target(base: String, r: Request): String = {
+    val path = if (r.path.isEmpty || r.path.startsWith("/")) r.path else "/" + r.path
+    base.stripSuffix("/") + path + (if (r.query.isEmpty) "" else "?" + Query.print(r.query))
+  }
+  /** a `Call` as the request it sends */
+  def request(method: String, url: String, headers: Map[String, String], body: String): Request = {
+    val i = url.indexOf("://")
+    val target = if (i < 0) url else url.substring(i + 3).indexOf('/') match {
+      case -1 => "/"
+      case j => url.substring(i + 3 + j)
+    }
+    Request(method, target).copy(headers = headers.map { case (k, v) => k.toLowerCase -> List(v) }, body = body)
+  }
+  /** the base of a URL: its scheme and authority */
+  def base(url: String): String = {
+    val i = url.indexOf("://")
+    if (i < 0) "" else url.substring(i + 3).indexOf('/') match {
+      case -1 => url
+      case j => url.substring(0, i + 3 + j)
+    }
+  }
 }
 
 /** `F` the implementation's singleton type: with an implicit implementation in scope (`import okay.effects.machine.Machine._`)
@@ -66,6 +91,9 @@ class Https[F <: Effects with Singleton](implicit implementation: F) {
   def fetch[R[_]](method: String, url: String, headers: Map[String, String] = Map.empty, body: String = "")(implicit in: In[Fetch, R]): Response ! R =
     perform[Fetch].apply[R, Response](Fetch.Call(method, url, headers, body, r => r))
   def get[R[_]](url: String)(implicit in: In[Fetch, R]): Response ! R = fetch[R]("GET", url)
+  /** any request — its body text or bytes — to `base` (a scheme and an authority, or more of a path) */
+  def send[R[_]](base: String, request: Request)(implicit in: In[Fetch, R]): Response ! R =
+    perform[Fetch].apply[R, Response](Fetch.Send(base, request, r => r))
   def postJson[R[_]](url: String, j: okay.effects.json.Json)(implicit in: In[Fetch, R]): Response ! R =
     fetch[R]("POST", url, Map("Content-Type" -> "application/json"), okay.effects.json.Json.print(j))
 
@@ -77,6 +105,9 @@ class Https[F <: Effects with Singleton](implicit implementation: F) {
         def ret(a: A) = pure(a)
         def answer[X](op: Fetch[X]): X = op match {
           case Fetch.Call(m, url, _, _, answer) => answer(answers.applyOrElse((m, url), (_: (String, String)) => Response.notFound(s"$m $url")))
+          case Fetch.Send(base, r, answer) =>
+            val url = Fetch.target(base, r)
+            answer(answers.applyOrElse((r.method, url), (_: (String, String)) => Response.notFound(s"${r.method} $url")))
         }
       })
   }
@@ -91,6 +122,7 @@ class Https[F <: Effects with Singleton](implicit implementation: F) {
           case Fetch.Call(m, url, headers, body, answer) =>
             val target = url.indexOf("://") match { case -1 => url; case i => val rest = url.substring(i + 3); rest.indexOf('/') match { case -1 => "/"; case j => rest.substring(j) } }
             server(Request(m, target).copy(headers = headers.map { case (k, v) => k.toLowerCase -> List(v) }, body = body)).flatMap(r => k(answer(r)))
+          case Fetch.Send(_, r, answer) => server(r).flatMap(res => k(answer(res)))
         }
       })
   }

@@ -3,7 +3,6 @@ package okay.http
 import com.sun.net.httpserver.{HttpExchange, HttpServer}
 import java.net.{InetSocketAddress, URI}
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 import okay.effects.Effects
 import scala.jdk.CollectionConverters._
@@ -15,15 +14,15 @@ final class JdkServer private (val server: HttpServer, val port: Int) {
   private final case class Pending(request: Request, var response: Response, done: CountDownLatch)
   private val queue = new LinkedBlockingQueue[Option[Pending]]
   server.createContext("/", (ex: HttpExchange) => {
-    val body = new String(ex.getRequestBody.readAllBytes(), StandardCharsets.UTF_8)
+    val (body, binary) = Bytes.body(ex.getRequestBody.readAllBytes())
     val uri = ex.getRequestURI
     val headers = ex.getRequestHeaders.asScala.map { case (k, vs) => k.toLowerCase -> vs.asScala.toList }.toMap
-    val pending = Pending(Request(ex.getRequestMethod, uri.getRawPath, Query.parse(Option(uri.getRawQuery).getOrElse("")), headers, body), Response(500), new CountDownLatch(1))
+    val pending = Pending(Request(ex.getRequestMethod, uri.getRawPath, Query.parse(Option(uri.getRawQuery).getOrElse("")), headers, body, binary), Response(500), new CountDownLatch(1))
     queue.put(Some(pending))
     pending.done.await()
     val r = pending.response
     r.headers.foreach { case (k, v) => ex.getResponseHeaders.add(k, v) }
-    val bytes = r.body.getBytes(StandardCharsets.UTF_8)
+    val bytes = r.content.toArray
     ex.sendResponseHeaders(r.status, if (bytes.isEmpty) -1 else bytes.length)
     if (bytes.nonEmpty) ex.getResponseBody.write(bytes)
     ex.close()
@@ -77,15 +76,23 @@ class JdkHttp[F <: Effects with Singleton](implicit implementation: F) {
   /** `Fetch` by the JDK's `HttpClient`, in place, blocking */
   def jdkClient(client: HttpClient = HttpClient.newHttpClient()): JdkClient = new JdkClient(client)
   final class JdkClient(client: HttpClient) {
+    /** headers the JDK sets itself, and refuses */
+    private val restricted = Set("connection", "content-length", "expect", "host", "upgrade")
+    private def call(url: String, req: Request): Response = {
+      val content = req.content.toArray
+      val b = HttpRequest.newBuilder(URI.create(url)).method(req.method,
+        if (content.isEmpty) HttpRequest.BodyPublishers.noBody() else HttpRequest.BodyPublishers.ofByteArray(content))
+      req.headers.foreach { case (k, vs) => if (!restricted(k.toLowerCase)) vs.foreach(v => b.header(k, v)) }
+      val r = client.send(b.build(), HttpResponse.BodyHandlers.ofByteArray())
+      Response(r.statusCode(), r.headers().map().asScala.map { case (k, vs) => k -> vs.asScala.mkString(", ") }.toMap)
+        .withContent(Bytes(r.body()))
+    }
     def apply[R[_], Rest[_], A](p: A ! R)(implicit sp: Split[Fetch, R, Rest]): A ! Rest =
       handle[Fetch, R, Rest, A, A](p, new TailHandler[Fetch, Rest, A, A] {
         def ret(a: A) = pure(a)
         def answer[X](op: Fetch[X]): X = op match {
-          case Fetch.Call(method, url, headers, body, answer) =>
-            val b = HttpRequest.newBuilder(URI.create(url)).method(method, if (body.isEmpty) HttpRequest.BodyPublishers.noBody() else HttpRequest.BodyPublishers.ofString(body))
-            headers.foreach { case (k, v) => b.header(k, v) }
-            val r = client.send(b.build(), HttpResponse.BodyHandlers.ofString())
-            answer(Response(r.statusCode(), r.headers().map().asScala.map { case (k, vs) => k -> vs.asScala.mkString(", ") }.toMap, r.body()))
+          case Fetch.Call(method, url, headers, body, answer) => answer(call(url, Fetch.request(method, url, headers, body)))
+          case Fetch.Send(base, r, answer) => answer(call(Fetch.target(base, r), r))
         }
       })
   }

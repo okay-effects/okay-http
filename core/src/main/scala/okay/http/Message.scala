@@ -2,10 +2,19 @@ package okay.http
 
 import okay.effects.json.Json
 
-/** A REQUEST as data: the method, the path, the query and the headers (names lowercased) as lists, the body as text */
-final case class Request(method: String, path: String, query: Map[String, List[String]] = Map.empty, headers: Map[String, List[String]] = Map.empty, body: String = "") {
+/** A REQUEST as data: the method, the path, the query and the headers (names lowercased) as lists, the body as text —
+ * or, when it is not text (an upload, an image), as `bytes`: then `bytes` is the body and `body` is empty */
+final case class Request(method: String, path: String, query: Map[String, List[String]] = Map.empty, headers: Map[String, List[String]] = Map.empty, body: String = "",
+                         bytes: Option[Bytes] = None) {
   def header(name: String): Option[String] = headers.get(name.toLowerCase).flatMap(_.headOption)
   def param(name: String): Option[String] = query.get(name).flatMap(_.headOption)
+  /** the body as bytes, text or not */
+  def content: Bytes = bytes.getOrElse(Bytes.of(body))
+  /** the body these bytes: kept as text if they are UTF-8, as bytes if not */
+  def withContent(raw: Bytes): Request = {
+    val (text, binary) = Bytes.body(raw.toArray)
+    copy(body = text, bytes = binary)
+  }
   def json: Either[String, Json] = okay.effects.json.Descent.parse(body).left.map(_.message)
 }
 object Request {
@@ -47,9 +56,17 @@ object Query {
   }.mkString
 }
 
-/** A RESPONSE as data */
-final case class Response(status: Int, headers: Map[String, String] = Map.empty, body: String = "") {
+/** A RESPONSE as data: the body as text — or, when it is not text, as `bytes` (then `body` is empty) */
+final case class Response(status: Int, headers: Map[String, String] = Map.empty, body: String = "",
+                          bytes: Option[Bytes] = None) {
   def header(name: String, value: String): Response = copy(headers = headers.updated(name, value))
+  /** the body as bytes, text or not */
+  def content: Bytes = bytes.getOrElse(Bytes.of(body))
+  /** the body these bytes: kept as text if they are UTF-8, as bytes if not */
+  def withContent(raw: Bytes): Response = {
+    val (text, binary) = Bytes.body(raw.toArray)
+    copy(body = text, bytes = binary)
+  }
 }
 object Response {
   def ok(body: String, contentType: String = "text/plain; charset=utf-8"): Response = Response(200, Map("Content-Type" -> contentType), body)
@@ -61,4 +78,7 @@ object Response {
   def badRequest(what: String): Response = text(what, 400)
   def methodNotAllowed(allowed: List[String]): Response = Response(405, Map("Allow" -> allowed.mkString(", "), "Content-Type" -> "text/plain; charset=utf-8"), "method not allowed")
   def noContent: Response = Response(204)
+  /** bytes as they are: a file, an image */
+  def binary(b: Bytes, contentType: String = "application/octet-stream", status: Int = 200): Response =
+    Response(status, Map("Content-Type" -> contentType)).withContent(b)
 }
