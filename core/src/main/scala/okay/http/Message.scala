@@ -18,6 +18,9 @@ final case class Request(method: String, path: String, query: Map[String, List[S
   def json: Either[String, Json] = okay.effects.json.Descent.parse(body).left.map(_.message)
 }
 object Request {
+  /** 0.1.0's constructor, kept: code compiled against it calls this one (binary compatibility) */
+  def apply(method: String, path: String, query: Map[String, List[String]], headers: Map[String, List[String]], body: String): Request =
+    new Request(method, path, query, headers, body, None)
   /** `GET /a/b?x=1&y=2`: the path and the query split */
   def apply(method: String, target: String): Request = {
     val (path, q) = target.indexOf('?') match { case -1 => (target, ""); case i => (target.substring(0, i), target.substring(i + 1)) }
@@ -69,6 +72,8 @@ final case class Response(status: Int, headers: Map[String, String] = Map.empty,
   }
 }
 object Response {
+  /** 0.1.0's constructor, kept: code compiled against it calls this one (binary compatibility) */
+  def apply(status: Int, headers: Map[String, String], body: String): Response = new Response(status, headers, body, None)
   def ok(body: String, contentType: String = "text/plain; charset=utf-8"): Response = Response(200, Map("Content-Type" -> contentType), body)
   def json(j: Json, status: Int = 200): Response = Response(status, Map("Content-Type" -> "application/json"), Json.print(j))
   def html(body: String, status: Int = 200): Response = Response(status, Map("Content-Type" -> "text/html; charset=utf-8"), body)
