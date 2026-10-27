@@ -15,6 +15,11 @@ class MessageSuite extends munit.FunSuite {
     assertEquals(Response.json(Json.obj("a" -> Json.num(1))), Response(200, Map("Content-Type" -> "application/json"), """{"a":1}"""))
     assertEquals(Response.redirect("/x").status, 303)
   }
+  test("0.1.0's constructors still there: code compiled against them runs") {
+    assertEquals(Response(200, Map("a" -> "b"), "x"), Response(200, Map("a" -> "b"), "x", None))
+    assertEquals(Request("GET", "/p", Map.empty[String, List[String]], Map.empty[String, List[String]], "b").bytes, None)
+    assertEquals(Response(404).status, 404)
+  }
   test("a body over the wire: UTF-8 text stays text, anything else is bytes, nothing lost") {
     assertEquals(Bytes.body("é ok".getBytes("UTF-8")), ("é ok", None))
     val raw = Array[Byte](0xc3.toByte, 0x28, -1)
