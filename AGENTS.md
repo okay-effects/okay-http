@@ -94,6 +94,8 @@ answered by `jdk.jdkClient()` at the entry, by `https.table { case ("GET", url) 
 - `Request.headers` keys are lowercase (`req.header("Content-Type")` lowercases for you); `Response.headers` keep
   what you set. The JDK client drops headers it refuses (`host`, `content-length`, `connection`, ...).
 - Bodies: text is `body`; a non-UTF-8 body is `bytes` and then `body` is `""`. Read `content` to get either.
+- `Bytes` is immutable data (copied in by `Bytes(array)`, copied out by `toArray`, compared by content): pass it to
+  business code as a value; a raw `Array[Byte]` is not.
 - `dispatch` answers 405 with `Allow` when the path matches another method, and a 404 `Trouble` otherwise; routes are
   tried in order. `Path` parameters are URL-decoded; `*` at the end takes the rest as `ps("*")`.
 - `rests.body(req, shape)` is `Either[Response, P]`: the `Left` is a ready 400 with every problem by path.

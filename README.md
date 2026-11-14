@@ -18,6 +18,7 @@ libraryDependencies += "io.github.okay-effects" %% "okay-http-rest" % "0.1.1"   
 A body is text (`body`) — or, when it is not UTF-8 (an image, an upload, a file), `bytes`: then `bytes` is the body and
 `body` is empty. `content` is the body as `Bytes` either way; `withContent(bytes)` and `Response.binary(bytes, type)`
 make one; the servers and clients keep each as it came. `Fetch.Send(base, request)` (`send`) sends any request, its
-body text or bytes; `Fetch.Call` stays for text.
+body text or bytes; `Fetch.Call` stays for text. `Bytes` is immutable data: `Bytes(array)` copies the array in,
+`toArray` copies it out, nothing aliases the caller's array, and it compares by content.
 
 In a page (Scala.js), `Browser.fetch()` is the client: a `Request` sent by the browser's `fetch`, the `Response` back as a `Future` — the transport okay-faces' remote face talks through.

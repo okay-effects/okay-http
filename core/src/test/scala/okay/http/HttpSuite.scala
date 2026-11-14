@@ -28,6 +28,18 @@ class MessageSuite extends munit.FunSuite {
     assertEquals(Request.post("/x", "t").content, Bytes.of("t"))
     assertEquals(okay.http.Fetch.target("https://h/", Request.get("/a?b=1")), "https://h/a?b=1")
   }
+  test("Bytes is immutable data: copied in, copied out, no alias of a caller's array") {
+    val raw = Array[Byte](1, 2, 3)
+    val b = Bytes(raw)
+    raw(0) = 9
+    assertEquals(b, Bytes(Array[Byte](1, 2, 3)))
+    b.toArray(1) = 9
+    assertEquals(b, Bytes(Array[Byte](1, 2, 3)))
+    val wire = Array[Byte](-1, 2)
+    val w = Bytes.body(wire)._2.get
+    wire(1) = 0
+    assertEquals(w.slice(1, 2), Bytes(Array[Byte](2)))
+  }
 }
 
 abstract class HttpChecks(val fx0: Runner, name: String) extends munit.FunSuite {
